@@ -14,7 +14,7 @@ const INPUT_DELAY: usize = 2; // in frames
 const ROOM_IP: &str = "matchbox.ducky.pics";
 // const ROOM_IP: &str = "localhost";
 const WS_OR_WSS: &str = "wss";
-const ROOM_PORT: u16 = 7777;
+const ROOM_PORT: u16 = 7778;
 
 const INPUT_UP: u8 = 1 << 0;
 const INPUT_DOWN: u8 = 1 << 1;
