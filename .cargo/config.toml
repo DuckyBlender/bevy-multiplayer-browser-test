@@ -1,7 +1,0 @@
-# Change the runner for wasm
-[target.wasm32-unknown-unknown]
-runner = "wasm-server-runner"
-
-# Set default target to wasm
-[build]
-target = "wasm32-unknown-unknown"
