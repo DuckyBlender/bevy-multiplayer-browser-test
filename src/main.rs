@@ -1,3 +1,5 @@
+#![allow(clippy::needless_pass_by_value)] // clippy false positive
+
 use bevy::prelude::*;
 use bevy_ggrs::{ggrs, GGRSPlugin, GGRSSchedule, PlayerInputs, RollbackIdProvider};
 use bevy_matchbox::prelude::*;
@@ -6,6 +8,9 @@ use bevy::render::camera::ScalingMode;
 
 const ROOM_ID: &str = "test";
 const ROOM_SIZE: usize = 2;
+const INPUT_DELAY: usize = 2; // in frames
+const ROOM_IP: &str = "matchbox.ducky.pics";
+const ROOM_PORT: u16 = 7777;
 
 const INPUT_UP: u8 = 1 << 0;
 const INPUT_DOWN: u8 = 1 << 1;
@@ -123,7 +128,7 @@ fn move_players(
 }
 
 fn start_matchbox_socket(mut commands: Commands) {
-    let room_url = format!("ws://localhost:3536/{}?next={}", ROOM_ID, ROOM_SIZE);
+    let room_url = format!("ws://{ROOM_IP}:{ROOM_PORT}/{ROOM_ID}?next={ROOM_SIZE}");
     info!("Connecting to matchbox server: {:?}", room_url);
     commands.insert_resource(MatchboxSocket::new_ggrs(room_url));
 }
@@ -146,12 +151,12 @@ fn wait_for_players(mut commands: Commands, mut socket: ResMut<MatchboxSocket<Si
     // create a GGRS P2P session
     let mut session_builder = ggrs::SessionBuilder::<GgrsConfig>::new()
         .with_num_players(ROOM_SIZE)
-        .with_input_delay(2);
+        .with_input_delay(INPUT_DELAY);
 
     for (i, player) in players.into_iter().enumerate() {
         session_builder = session_builder
             .add_player(player, i)
-            .expect("failed to add player");
+            .expect("Failed to add player");
     }
 
     // move the channel out of the socket (required because GGRS takes ownership of it)
@@ -160,7 +165,7 @@ fn wait_for_players(mut commands: Commands, mut socket: ResMut<MatchboxSocket<Si
     // start the GGRS session
     let ggrs_session = session_builder
         .start_p2p_session(channel)
-        .expect("failed to start session");
+        .expect("Failed to start session");
 
     commands.insert_resource(bevy_ggrs::Session::P2PSession(ggrs_session));
 }
@@ -175,7 +180,7 @@ fn input(_: In<ggrs::PlayerHandle>, keys: Res<Input<KeyCode>>) -> u8 {
         input |= INPUT_DOWN;
     }
     if keys.any_pressed([KeyCode::Left, KeyCode::A]) {
-        input |= INPUT_LEFT
+        input |= INPUT_LEFT;
     }
     if keys.any_pressed([KeyCode::Right, KeyCode::D]) {
         input |= INPUT_RIGHT;
