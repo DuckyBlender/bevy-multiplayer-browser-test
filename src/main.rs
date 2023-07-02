@@ -1,7 +1,10 @@
 #![allow(clippy::needless_pass_by_value)] // clippy pedantic false positive
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
-use bevy::prelude::*;
+use bevy::{
+    core::{Pod, Zeroable},
+    prelude::*,
+};
 use bevy_ggrs::{ggrs, GGRSPlugin, GGRSSchedule, PlayerInputs, RollbackIdProvider};
 use bevy_matchbox::prelude::*;
 
@@ -11,28 +14,34 @@ const ROOM_ID: &str = "duckytest";
 const ROOM_SIZE: usize = 2;
 const INPUT_DELAY: usize = 2; // in frames
 
-const ROOM_IP: &str = "matchbox.ducky.pics";
-// const ROOM_IP: &str = "localhost";
-const WS_OR_WSS: &str = "wss";
-const ROOM_PORT: u16 = 7778;
+const LOCAL: bool = false;
 
-const INPUT_UP: u8 = 1 << 0;
-const INPUT_DOWN: u8 = 1 << 1;
-const INPUT_LEFT: u8 = 1 << 2;
-const INPUT_RIGHT: u8 = 1 << 3;
-const INPUT_FIRE: u8 = 1 << 4;
+const ROOM_IP: &str = if LOCAL {
+    "localhost"
+} else {
+    "matchbox.ducky.pics"
+};
+const WS_OR_WSS: &str = if LOCAL { "ws" } else { "wss" };
+const ROOM_PORT: u16 = 1255;
 
 #[derive(Component)]
 struct Player {
     handle: usize,
 }
 
+#[derive(Copy, Clone, Pod, Zeroable, PartialEq)]
+#[repr(C)]
+struct MouseChanges {
+    x: f32,
+    y: f32,
+}
+
 struct GgrsConfig;
 
 impl ggrs::Config for GgrsConfig {
-    // 4-directions + fire fits easily in a single byte
-    type Input = u8;
-    type State = u8;
+    // x and y offsets (first 32 bits are x, last 32 bits are y)
+    type Input = MouseChanges;
+    type State = i64;
     // Matchbox' WebRtcSocket addresses are called `PeerId`s
     type Address = PeerId;
 }
@@ -63,7 +72,7 @@ fn main() {
 
 fn setup(mut commands: Commands) {
     let mut camera_bundle = Camera2dBundle::default();
-    camera_bundle.projection.scaling_mode = ScalingMode::FixedVertical(10.);
+    camera_bundle.projection.scaling_mode = ScalingMode::FixedVertical(10.); // one unit is 10 pixels
     commands.spawn(camera_bundle);
 }
 
@@ -76,7 +85,7 @@ fn spawn_players(mut commands: Commands, mut rollback: ResMut<RollbackIdProvider
             transform: Transform::from_translation(Vec3::new(-2., 0., 0.)),
             sprite: Sprite {
                 color: Color::rgb(0., 0.47, 1.),
-                custom_size: Some(Vec2::new(1., 1.)),
+                custom_size: Some(Vec2::new(0.5, 0.5)),
                 ..default()
             },
             ..default()
@@ -91,7 +100,7 @@ fn spawn_players(mut commands: Commands, mut rollback: ResMut<RollbackIdProvider
             transform: Transform::from_translation(Vec3::new(2., 0., 0.)),
             sprite: Sprite {
                 color: Color::rgb(1., 0.47, 0.),
-                custom_size: Some(Vec2::new(1., 1.)),
+                custom_size: Some(Vec2::new(0.5, 0.5)),
                 ..default()
             },
             ..default()
@@ -106,28 +115,15 @@ fn move_players(
     for (mut transform, player) in player_query.iter_mut() {
         let (input, _) = inputs[player.handle];
 
-        let mut direction = Vec2::ZERO;
-
-        if input & INPUT_UP != 0 {
-            direction.y += 1.;
-        }
-        if input & INPUT_DOWN != 0 {
-            direction.y -= 1.;
-        }
-        if input & INPUT_RIGHT != 0 {
-            direction.x += 1.;
-        }
-        if input & INPUT_LEFT != 0 {
-            direction.x -= 1.;
-        }
-        if direction == Vec2::ZERO {
+        // unpack the input data
+        let (x, y) = (input.x, input.y);
+        // Check if mouse is moving
+        if x == 0. && y == 0. {
             continue;
         }
 
-        let move_speed = 0.13;
-        let move_delta = (direction * move_speed).extend(0.);
-
-        transform.translation += move_delta;
+        // info!("Moving player {} to {:?}", player.handle, (x, y));
+        transform.translation = Vec3::new(x, y, 0.);
     }
 }
 
@@ -174,24 +170,39 @@ fn wait_for_players(mut commands: Commands, mut socket: ResMut<MatchboxSocket<Si
     commands.insert_resource(bevy_ggrs::Session::P2PSession(ggrs_session));
 }
 
-fn input(_: In<ggrs::PlayerHandle>, keys: Res<Input<KeyCode>>) -> u8 {
-    let mut input = 0u8;
+fn input(
+    _: In<ggrs::PlayerHandle>,
+    mut mouse_movement: EventReader<CursorMoved>,
+    window: Query<&Window>,
+) -> MouseChanges {
+    let mut input = MouseChanges { x: 0., y: 0. };
 
-    if keys.any_pressed([KeyCode::Up, KeyCode::W]) {
-        input |= INPUT_UP;
+    for event in mouse_movement.iter() {
+        input.x = event.position.x;
+        input.y = event.position.y;
     }
-    if keys.any_pressed([KeyCode::Down, KeyCode::S]) {
-        input |= INPUT_DOWN;
+
+    if input.x == 0. && input.y == 0. {
+        // Return early if the mouse hasn't moved
+        return input;
     }
-    if keys.any_pressed([KeyCode::Left, KeyCode::A]) {
-        input |= INPUT_LEFT;
-    }
-    if keys.any_pressed([KeyCode::Right, KeyCode::D]) {
-        input |= INPUT_RIGHT;
-    }
-    if keys.any_pressed([KeyCode::Space, KeyCode::Return]) {
-        input |= INPUT_FIRE;
-    }
+
+    // We need to convert the screen coordinates to world coordinates
+    let window = window.single();
+    let (width, height, aspect_ratio) = (
+        window.width(),
+        window.height(),
+        window.width() / window.height(),
+    );
+    // The center is (0, 0), so we need to offset the mouse position
+    input.x -= width / 2.;
+    input.y -= height / 2.;
+
+    // The camera is 10 units away from the origin, so we need to scale the mouse position
+    input.x *= aspect_ratio * 10. / width;
+    input.y *= 10. / height;
+
+    info!("mouse: {}, {}", input.x, input.y);
 
     input
 }
