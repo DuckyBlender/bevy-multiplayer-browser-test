@@ -7,10 +7,13 @@ use bevy_matchbox::prelude::*;
 
 use bevy::render::camera::ScalingMode;
 
-const ROOM_ID: &str = "test";
+const ROOM_ID: &str = "duckytest";
 const ROOM_SIZE: usize = 2;
 const INPUT_DELAY: usize = 2; // in frames
+
 const ROOM_IP: &str = "matchbox.ducky.pics";
+// const ROOM_IP: &str = "localhost";
+const WS_OR_WSS: &str = "wss";
 const ROOM_PORT: u16 = 7777;
 
 const INPUT_UP: u8 = 1 << 0;
@@ -129,7 +132,7 @@ fn move_players(
 }
 
 fn start_matchbox_socket(mut commands: Commands) {
-    let room_url = format!("ws://{ROOM_IP}:{ROOM_PORT}/{ROOM_ID}?next={ROOM_SIZE}");
+    let room_url = format!("{WS_OR_WSS}://{ROOM_IP}:{ROOM_PORT}/{ROOM_ID}?next={ROOM_SIZE}");
     info!("Connecting to matchbox server: {:?}", room_url);
     commands.insert_resource(MatchboxSocket::new_ggrs(room_url));
 }
