@@ -1,21 +1,23 @@
 name: Deploy to GitHub Pages
 
-# Run workflow on every push to the master branch
 on:
   push:
-    branches: [master]
+    branches:
+      - main
 
 jobs:
-  deploy-to-github-pages:
-    # use ubuntu-latest image to run steps on
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      # uses GitHub's checkout action to checkout code form the master branch
-      - uses: actions/checkout@v2
-      # setup rust environment
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
         with:
-          targets: wasm32-unknown-unknown
+          toolchain: stable
+
       - name: install wasm-bindgen-cli
         run: |
           cargo install wasm-bindgen-cli
@@ -24,14 +26,13 @@ jobs:
         run: |
           cargo build --release --target wasm32-unknown-unknown
 
-      - name: Prepare package
+      - name: Generate JS bindings
         run: |
-          wasm-bindgen --no-typescript --out-name bevy_game --out-dir wasm --target web target/wasm32-unknown-unknown/release/output.wasm
-          cp -r assets wasm/
+          wasm-bindgen --no-typescript --out-name bevy_game --out-dir ./wasm --target web ./target/wasm32-unknown-unknown/release/bevy-multiplayer-browser-test.wasm
+        # copy to wasm folder because it contains the index.html
 
-      - name: Commit wasm to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@3.7.1
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: gh-pages
-          FOLDER: wasm
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./wasm
