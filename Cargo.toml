@@ -8,8 +8,8 @@ edition = "2021"
 bevy = "0.10.1"
 
 # Networking
-bevy_ggrs = { version = "0.12", features = ["wasm-bindgen"] }
-bevy_matchbox = { version = "0.6", features = ["ggrs"] }
+bevy_ggrs = { version = "0.12", features = ["wasm-bindgen"] } # GGRS (rollback networking)
+bevy_matchbox = { version = "0.6", features = ["ggrs"] } # Matchbox (connection management)
 
 [workspace]
 resolver = "2" # Important! wgpu/Bevy needs this!

@@ -1,25 +1,52 @@
 use bevy::prelude::*;
+use bevy_ggrs::{ggrs, GGRSPlugin, GGRSSchedule, PlayerInputs};
+use bevy_matchbox::prelude::*;
+
 use bevy::render::camera::ScalingMode;
+
+const ROOM_ID: &str = "test";
+const ROOM_SIZE: usize = 2;
+
+const INPUT_UP: u8 = 1 << 0;
+const INPUT_DOWN: u8 = 1 << 1;
+const INPUT_LEFT: u8 = 1 << 2;
+const INPUT_RIGHT: u8 = 1 << 3;
+const INPUT_FIRE: u8 = 1 << 4;
 
 #[derive(Component)]
 struct Player;
 
+struct GgrsConfig;
+
+impl ggrs::Config for GgrsConfig {
+    // 4-directions + fire fits easily in a single byte
+    type Input = u8;
+    type State = u8;
+    // Matchbox' WebRtcSocket addresses are called `PeerId`s
+    type Address = PeerId;
+}
+
 fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                // fill the entire browser window
-                fit_canvas_to_parent: true,
-                // don't hijack keyboard shortcuts like F5, F6, F12, Ctrl+R etc.
-                prevent_default_event_handling: false,
-                ..default()
-            }),
+    let mut app = App::new();
+
+    GGRSPlugin::<GgrsConfig>::new()
+        .with_input_system(input)
+        .build(&mut app);
+
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            // fill the entire browser window
+            fit_canvas_to_parent: true,
+            // don't hijack keyboard shortcuts like F5, F6, F12, Ctrl+R etc.
+            prevent_default_event_handling: false,
             ..default()
-        }))
-        .insert_resource(ClearColor(Color::rgb(0.15, 0.15, 0.15)))
-        .add_startup_systems((setup, spawn_player))
-        .add_systems((move_player,))
-        .run();
+        }),
+        ..default()
+    }))
+    .insert_resource(ClearColor(Color::rgb(0.15, 0.15, 0.15)))
+    .add_startup_systems((setup, spawn_player, start_matchbox_socket))
+    .add_systems((move_player.in_schedule(GGRSSchedule), wait_for_players)) // NEW
+    .run();
 }
 
 fn setup(mut commands: Commands) {
@@ -42,18 +69,24 @@ fn spawn_player(mut commands: Commands) {
     ));
 }
 
-fn move_player(keys: Res<Input<KeyCode>>, mut player_query: Query<&mut Transform, With<Player>>) {
+fn move_player(
+    inputs: Res<PlayerInputs<GgrsConfig>>,
+    mut player_query: Query<&mut Transform, With<Player>>,
+) {
     let mut direction = Vec2::ZERO;
-    if keys.any_pressed([KeyCode::Up, KeyCode::W]) {
+
+    let (input, _) = inputs[0];
+
+    if input & INPUT_UP != 0 {
         direction.y += 1.;
     }
-    if keys.any_pressed([KeyCode::Down, KeyCode::S]) {
+    if input & INPUT_DOWN != 0 {
         direction.y -= 1.;
     }
-    if keys.any_pressed([KeyCode::Right, KeyCode::D]) {
+    if input & INPUT_RIGHT != 0 {
         direction.x += 1.;
     }
-    if keys.any_pressed([KeyCode::Left, KeyCode::A]) {
+    if input & INPUT_LEFT != 0 {
         direction.x -= 1.;
     }
     if direction == Vec2::ZERO {
@@ -66,4 +99,69 @@ fn move_player(keys: Res<Input<KeyCode>>, mut player_query: Query<&mut Transform
     for mut transform in player_query.iter_mut() {
         transform.translation += move_delta;
     }
+}
+
+fn start_matchbox_socket(mut commands: Commands) {
+    let room_url = format!("ws://localhost:3536/{}?next={}", ROOM_ID, ROOM_SIZE);
+    info!("Connecting to matchbox server: {:?}", room_url);
+    commands.insert_resource(MatchboxSocket::new_ggrs(room_url));
+}
+
+fn wait_for_players(mut commands: Commands, mut socket: ResMut<MatchboxSocket<SingleChannel>>) {
+    if socket.get_channel(0).is_err() {
+        return; // we've already started
+    }
+
+    // Check for new connections
+    socket.update_peers();
+    let players = socket.players();
+
+    if players.len() < ROOM_SIZE {
+        return; // wait for more players
+    }
+
+    info!("All peers have joined, going in-game");
+
+    // create a GGRS P2P session
+    let mut session_builder = ggrs::SessionBuilder::<GgrsConfig>::new()
+        .with_num_players(ROOM_SIZE)
+        .with_input_delay(2);
+
+    for (i, player) in players.into_iter().enumerate() {
+        session_builder = session_builder
+            .add_player(player, i)
+            .expect("failed to add player");
+    }
+
+    // move the channel out of the socket (required because GGRS takes ownership of it)
+    let channel = socket.take_channel(0).unwrap();
+
+    // start the GGRS session
+    let ggrs_session = session_builder
+        .start_p2p_session(channel)
+        .expect("failed to start session");
+
+    commands.insert_resource(bevy_ggrs::Session::P2PSession(ggrs_session));
+}
+
+fn input(_: In<ggrs::PlayerHandle>, keys: Res<Input<KeyCode>>) -> u8 {
+    let mut input = 0u8;
+
+    if keys.any_pressed([KeyCode::Up, KeyCode::W]) {
+        input |= INPUT_UP;
+    }
+    if keys.any_pressed([KeyCode::Down, KeyCode::S]) {
+        input |= INPUT_DOWN;
+    }
+    if keys.any_pressed([KeyCode::Left, KeyCode::A]) {
+        input |= INPUT_LEFT
+    }
+    if keys.any_pressed([KeyCode::Right, KeyCode::D]) {
+        input |= INPUT_RIGHT;
+    }
+    if keys.any_pressed([KeyCode::Space, KeyCode::Return]) {
+        input |= INPUT_FIRE;
+    }
+
+    input
 }
