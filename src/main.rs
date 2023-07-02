@@ -1,4 +1,5 @@
-#![allow(clippy::needless_pass_by_value)] // clippy false positive
+#![allow(clippy::needless_pass_by_value)] // clippy pedantic false positive
+#![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
 use bevy::prelude::*;
 use bevy_ggrs::{ggrs, GGRSPlugin, GGRSSchedule, PlayerInputs, RollbackIdProvider};
