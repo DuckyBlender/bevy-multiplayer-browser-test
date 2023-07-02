@@ -22,7 +22,7 @@ const ROOM_IP: &str = if LOCAL {
     "matchbox.ducky.pics"
 };
 const WS_OR_WSS: &str = if LOCAL { "ws" } else { "wss" };
-const ROOM_PORT: u16 = 1255;
+const ROOM_PORT: u16 = 7778;
 
 #[derive(Component)]
 struct Player {
