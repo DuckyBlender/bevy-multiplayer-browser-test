@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_ggrs::{ggrs, GGRSPlugin, GGRSSchedule, PlayerInputs};
+use bevy_ggrs::{ggrs, GGRSPlugin, GGRSSchedule, PlayerInputs, RollbackIdProvider};
 use bevy_matchbox::prelude::*;
 
 use bevy::render::camera::ScalingMode;
@@ -31,6 +31,7 @@ fn main() {
 
     GGRSPlugin::<GgrsConfig>::new()
         .with_input_system(input)
+        .register_rollback_component::<Transform>() // rollback the player's position to be in sync with the game state
         .build(&mut app);
 
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -55,9 +56,10 @@ fn setup(mut commands: Commands) {
     commands.spawn(camera_bundle);
 }
 
-fn spawn_player(mut commands: Commands) {
+fn spawn_player(mut commands: Commands, mut rollback: ResMut<RollbackIdProvider>) {
     commands.spawn((
         Player,
+        rollback.next(), // rollback component has a unique ID
         SpriteBundle {
             sprite: Sprite {
                 color: Color::rgb(0., 0.47, 1.),
