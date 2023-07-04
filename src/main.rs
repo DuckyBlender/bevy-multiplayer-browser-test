@@ -19,14 +19,13 @@ const LOCAL: bool = false;
 const ROOM_IP: &str = if LOCAL {
     "localhost"
 } else {
-    "matchbox.voxelnetwork.pl"
+    "matchbox.ducky.pics"
 };
 
 // const WS_OR_WSS: &str = if LOCAL { "ws" } else { "wss" };
-// For voxelnetwork.pl it's always ws
 const WS_OR_WSS: &str = "ws";
 
-const ROOM_PORT: u16 = 7778;
+const ROOM_PORT: u16 = 80;
 
 #[derive(Component)]
 struct Player {
