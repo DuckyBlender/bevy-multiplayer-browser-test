@@ -14,7 +14,7 @@ const ROOM_ID: &str = "duckytest";
 const ROOM_SIZE: usize = 2;
 const INPUT_DELAY: usize = 2; // in frames
 
-const LOCAL: bool = true;
+const LOCAL: bool = false;
 
 const ROOM_IP: &str = if LOCAL {
     "localhost"
