@@ -19,10 +19,13 @@ const LOCAL: bool = true;
 const ROOM_IP: &str = if LOCAL {
     "localhost"
 } else {
-    "matchbox.ducky.pics"
+    "matchbox.voxelnetwork.pl"
 };
 
-const WS_OR_WSS: &str = if LOCAL { "ws" } else { "wss" };
+// const WS_OR_WSS: &str = if LOCAL { "ws" } else { "wss" };
+// For voxelnetwork.pl it's always ws
+const WS_OR_WSS: &str = "ws";
+
 const ROOM_PORT: u16 = 7778;
 
 #[derive(Component)]
