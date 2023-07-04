@@ -22,8 +22,7 @@ const ROOM_IP: &str = if LOCAL {
     "matchbox.ducky.pics"
 };
 
-// const WS_OR_WSS: &str = if LOCAL { "ws" } else { "wss" };
-const WS_OR_WSS: &str = "ws";
+const WS_OR_WSS: &str = if LOCAL { "ws" } else { "wss" };
 
 const ROOM_PORT: u16 = 80;
 
